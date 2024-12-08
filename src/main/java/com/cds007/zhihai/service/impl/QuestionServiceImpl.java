@@ -1,7 +1,9 @@
 package com.cds007.zhihai.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.cds007.zhihai.common.ErrorCode;
@@ -10,9 +12,11 @@ import com.cds007.zhihai.exception.ThrowUtils;
 import com.cds007.zhihai.mapper.QuestionMapper;
 import com.cds007.zhihai.model.dto.question.QuestionQueryRequest;
 import com.cds007.zhihai.model.entity.Question;
+import com.cds007.zhihai.model.entity.QuestionBankQuestion;
 import com.cds007.zhihai.model.entity.User;
 import com.cds007.zhihai.model.vo.QuestionVO;
 import com.cds007.zhihai.model.vo.UserVO;
+import com.cds007.zhihai.service.QuestionBankQuestionService;
 import com.cds007.zhihai.service.QuestionService;
 import com.cds007.zhihai.service.UserService;
 import com.cds007.zhihai.utils.SqlUtils;
@@ -23,6 +27,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.sql.Wrapper;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +46,9 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private QuestionBankQuestionService questionBankQuestionService;
 
     /**
      * 校验数据
@@ -92,6 +100,7 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         List<String> tagList = questionQueryRequest.getTags();
         Long userId = questionQueryRequest.getUserId();
         String answer = questionQueryRequest.getAnswer();
+
         // todo 补充需要的查询条件
         // 从多字段中搜索
         if (StringUtils.isNotBlank(searchText)) {
@@ -184,5 +193,38 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question> i
         questionVOPage.setRecords(questionVOList);
         return questionVOPage;
     }
+
+    /**
+     * 分页获取题目列表（仅管理员可用）
+     *
+     * @param questionQueryRequest
+     * @return
+     */
+    @Override
+    public Page<Question> listQuestionByPage(QuestionQueryRequest questionQueryRequest){
+        //1.获取分页信息
+        long current = questionQueryRequest.getCurrent();
+        long pageSize = questionQueryRequest.getPageSize();
+        //2.拷贝原始查询信息
+        QueryWrapper<Question> queryWrapper = getQueryWrapper(questionQueryRequest);
+        //3.处理题库ID的查询逻辑
+        Long questionBankId = questionQueryRequest.getQuestionBankId();
+        if (questionBankId != null){
+            //获取所有只含有该题库ID的题目ID集合，然后用In来连接查询条件
+            LambdaQueryWrapper<QuestionBankQuestion> eq = Wrappers.lambdaQuery(QuestionBankQuestion.class).select(QuestionBankQuestion::getQuestionId)
+                    .eq(QuestionBankQuestion::getQuestionBankId, questionBankId);
+            List<QuestionBankQuestion> list = questionBankQuestionService.list(eq);
+            if (CollUtil.isNotEmpty(list)){
+                //转换为只有Id的集合，用Set和List都可以
+                List<Long> questionIdList = list.stream().map(QuestionBankQuestion::getQuestionId).collect(Collectors.toList());
+                queryWrapper.in("id", questionIdList);
+            }
+        }
+        //4.查询数据库并返回分页题目列表
+        Page<Question> questionPage = page(new Page<>(current, pageSize), queryWrapper);
+        return questionPage;
+    }
+
+
 
 }

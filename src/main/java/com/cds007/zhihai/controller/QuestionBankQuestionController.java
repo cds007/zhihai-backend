@@ -1,5 +1,7 @@
 package com.cds007.zhihai.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.cds007.zhihai.annotation.AuthCheck;
 import com.cds007.zhihai.common.BaseResponse;
@@ -11,6 +13,7 @@ import com.cds007.zhihai.exception.BusinessException;
 import com.cds007.zhihai.exception.ThrowUtils;
 import com.cds007.zhihai.model.dto.questionBankQuestion.QuestionBankQuestionAddRequest;
 import com.cds007.zhihai.model.dto.questionBankQuestion.QuestionBankQuestionQueryRequest;
+import com.cds007.zhihai.model.dto.questionBankQuestion.QuestionBankQuestionRemoveRequest;
 import com.cds007.zhihai.model.dto.questionBankQuestion.QuestionBankQuestionUpdateRequest;
 import com.cds007.zhihai.model.entity.QuestionBankQuestion;
 import com.cds007.zhihai.model.entity.User;
@@ -18,6 +21,7 @@ import com.cds007.zhihai.model.vo.QuestionBankQuestionVO;
 import com.cds007.zhihai.service.QuestionBankQuestionService;
 import com.cds007.zhihai.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -51,6 +55,7 @@ public class QuestionBankQuestionController {
      * @return
      */
     @PostMapping("/add")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addQuestionBankQuestion(@RequestBody QuestionBankQuestionAddRequest questionBankQuestionAddRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(questionBankQuestionAddRequest == null, ErrorCode.PARAMS_ERROR);
         // todo 在此处将实体类和 DTO 进行转换
@@ -201,6 +206,32 @@ public class QuestionBankQuestionController {
         // 获取封装类
         return ResultUtils.success(questionBankQuestionService.getQuestionBankQuestionVOPage(questionBankQuestionPage, request));
     }
+
+    /**
+     * 创建题库题目关联
+     *
+     * @param questionBankQuestionRemoveRequest
+     * @return
+     */
+    @PostMapping("/remove")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> removeQuestionBankQuestion(
+            @RequestBody QuestionBankQuestionRemoveRequest questionBankQuestionRemoveRequest
+    ) {
+        ThrowUtils.throwIf(questionBankQuestionRemoveRequest == null, ErrorCode.PARAMS_ERROR);
+        // 获取参数
+        Long questionBankId = questionBankQuestionRemoveRequest.getQuestionBankId();
+        Long questionId = questionBankQuestionRemoveRequest.getQuestionId();
+        // 判断参数是否为空
+        ThrowUtils.throwIf(questionBankId == null || questionId == null, ErrorCode.PARAMS_ERROR);
+        // 删除关联
+        LambdaQueryWrapper<QuestionBankQuestion> lambdaQueryWrapper= Wrappers.lambdaQuery(QuestionBankQuestion.class)
+                .eq(QuestionBankQuestion::getQuestionId, questionId)
+                .eq(QuestionBankQuestion::getQuestionBankId,questionBankId);
+        boolean result = questionBankQuestionService.remove(lambdaQueryWrapper);
+        return ResultUtils.success(result);
+    }
+
 
     // endregion
 }
